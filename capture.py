@@ -1,7 +1,7 @@
 import socket
 import json
-import pyvjoy
 import logging
+from pyvjoystick import vigem as vg
 
 # -----------------------------
 # Event Type Definitions
@@ -12,53 +12,90 @@ EV_ABS = 0x03
 # -----------------------------
 # Xbox Button Codes (common)
 # -----------------------------
-BTN_A       = 304  # "South" button (A)
-BTN_B       = 305  # "East"  button (B)
-BTN_X       = 307  # "West"  button (X)
-BTN_Y       = 308  # "North" button (Y)
-BTN_TL      = 310  # Left bumper (LB)
-BTN_TR      = 311  # Right bumper (RB)
-BTN_THUMBL  = 317  # Left stick click
-BTN_THUMBR  = 318  # Right stick click
-BTN_START   = 315
-BTN_SELECT  = 314
+BTN_A = 304
+BTN_B = 305
+BTN_X = 307
+BTN_Y = 308
+BTN_TL = 310
+BTN_TR = 311
+BTN_THUMBL = 317
+BTN_THUMBR = 318
+BTN_START = 315
+BTN_SELECT = 314
 
 # -----------------------------
 # Xbox ABS (Axis) Codes (common)
 # -----------------------------
-ABS_X       = 0    # Left stick X
-ABS_Y       = 1    # Left stick Y
-ABS_Z       = 2    # Left trigger   (sometimes)
-ABS_RX      = 3    # Right stick X
-ABS_RY      = 4    # Right stick Y
-ABS_RZ      = 5    # Right trigger  (sometimes)
-ABS_HAT0X   = 16   # D-Pad left/right
-ABS_HAT0Y   = 17   # D-Pad up/down
+ABS_X = 0
+ABS_Y = 1
+ABS_Z = 2
+ABS_RX = 3
+ABS_RY = 4
+ABS_RZ = 5
+ABS_HAT0X = 16
+ABS_HAT0Y = 17
+
+# Xbox Button Mapping
+button_map = {
+    304: vg.XUSB_BUTTON.XUSB_GAMEPAD_A,
+    305: vg.XUSB_BUTTON.XUSB_GAMEPAD_B,
+    307: vg.XUSB_BUTTON.XUSB_GAMEPAD_X,
+    308: vg.XUSB_BUTTON.XUSB_GAMEPAD_Y,
+    310: vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,
+    311: vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
+    317: vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB,
+    318: vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB,
+    315: vg.XUSB_BUTTON.XUSB_GAMEPAD_START,
+    314: vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK
+}
+
+# Initialize the VX360Gamepad
+gamepad = vg.VX360Gamepad()
+
+# Initialize joystick state
+left_joystick_state = {'x': 0.0, 'y': 0.0}
+right_joystick_state = {'x': 0.0, 'y': 0.0}
+
+def normalize_trigger(value):
+    """Normalize a trigger value (0..1023) to 0..255."""
+    return int((value / 1023) * 255)
 
 def normalize_axis(value):
-    """
-    Convert a signed 16-bit value (-32768..32767)
-    into an unsigned 0..32767 range for pyvjoy.
-    """
-    return (value + 32768) // 2
+    """Normalize a signed 16-bit value (-32768..32767) to -1.0..1.0."""
+    # return max(-1.0, min(1.0, value / 32767.0))
+    print(value)
+    return value
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+def update_left_joystick(gamepad, x_value=None, y_value=None):
+    """Update the left joystick while preserving its state."""
+    if x_value is not None:
+        left_joystick_state['x'] = normalize_axis(x_value)
+    if y_value is not None:
+        left_joystick_state['y'] = normalize_axis(y_value)
+    gamepad.left_joystick_float(
+        x_value_float=left_joystick_state['x'],
+        y_value_float=left_joystick_state['y']
+    )
+
+def update_right_joystick(gamepad, x_value=None, y_value=None):
+    """Update the right joystick while preserving its state."""
+    if x_value is not None:
+        right_joystick_state['x'] = normalize_axis(x_value)
+    if y_value is not None:
+        right_joystick_state['y'] = normalize_axis(y_value)
+    gamepad.right_joystick_float(
+        x_value_float=right_joystick_state['x'],
+        y_value_float=right_joystick_state['y']
+    )
 
 def receive_inputs(port):
-    # Create a vJoy device object (device #1 assumed)
-    j = pyvjoy.VJoyDevice(1)
-
     logging.info(f"Listening for incoming data on port {port}")
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(('', port))
         try:
             while True:
-                # Receive up to 1024 bytes
                 data, addr = sock.recvfrom(1024)
                 logging.info(f"Received data from {addr}: {data}")
-
-                # Parse JSON
                 event = json.loads(data.decode('utf-8'))
                 logging.debug(f"Processing event: {event}")
 
@@ -67,72 +104,53 @@ def receive_inputs(port):
                 evt_value = event.get('value')
 
                 if evt_type == EV_KEY:
-                    # Process button events
-                    # Mapping: your choice how to map codes -> vJoy button numbers
-                    if evt_code == BTN_A:
-                        j.set_button(1, evt_value)  # A -> Button #1
-                    elif evt_code == BTN_B:
-                        j.set_button(2, evt_value)  # B -> Button #2
-                    elif evt_code == BTN_X:
-                        j.set_button(3, evt_value)  # X -> Button #3
-                    elif evt_code == BTN_Y:
-                        j.set_button(4, evt_value)  # Y -> Button #4
-                    elif evt_code == BTN_TL:
-                        j.set_button(5, evt_value)  # LB
-                    elif evt_code == BTN_TR:
-                        j.set_button(6, evt_value)  # RB
-                    elif evt_code == BTN_START:
-                        j.set_button(7, evt_value)  # START
-                    elif evt_code == BTN_SELECT:
-                        j.set_button(8, evt_value)  # BACK
-                    elif evt_code == BTN_THUMBL:
-                        j.set_button(9, evt_value)  # Left stick click
-                    elif evt_code == BTN_THUMBR:
-                        j.set_button(10, evt_value) # Right stick click
-                    # ...add more if you like
+                    button = button_map.get(evt_code)
+                    if button:
+                        if evt_value:  # Press button
+                            gamepad.press_button(button)
+                        else:  # Release button
+                            gamepad.release_button(button)
 
                 elif evt_type == EV_ABS:
-                    # Process analog axes
-                    if evt_code == ABS_X:
-                        j.set_axis(pyvjoy.HID_USAGE_X, normalize_axis(evt_value))
-                    elif evt_code == ABS_Y:
-                        j.set_axis(pyvjoy.HID_USAGE_Y, normalize_axis(evt_value))
-                    elif evt_code == ABS_RX:
-                        j.set_axis(pyvjoy.HID_USAGE_RX, normalize_axis(evt_value))
-                    elif evt_code == ABS_RY:
-                        j.set_axis(pyvjoy.HID_USAGE_RY, normalize_axis(evt_value))
-                    elif evt_code == ABS_Z:
-                        # Could treat as left trigger or something else
-                        j.set_axis(pyvjoy.HID_USAGE_Z, normalize_axis(evt_value))
-                    elif evt_code == ABS_RZ:
-                        # Could treat as right trigger
-                        j.set_axis(pyvjoy.HID_USAGE_RZ, normalize_axis(evt_value))
+                    if evt_code in [ABS_X, ABS_Y, ABS_RX, ABS_RY]:
+                        # Normalize joystick values
+                        value_float = evt_value / 32767.0
+                        if evt_code == 0:  # ABS_X
+                            update_left_joystick(gamepad, x_value=value_float)
+                        elif evt_code == 1:  # ABS_Y
+                            update_left_joystick(gamepad, y_value=-value_float)
+                        elif evt_code == 3:  # ABS_RX
+                            update_right_joystick(gamepad, x_value=value_float)
+                        elif evt_code == 4:  # ABS_RY
+                            update_right_joystick(gamepad, y_value=-value_float)
+                        elif evt_code == 2:  # Left Trigger
+                            gamepad.left_trigger(normalize_trigger(evt_value))
+                        elif evt_code == 5:  # Right Trigger
+                            gamepad.right_trigger(normalize_trigger(evt_value))
                     elif evt_code == ABS_HAT0X:
-                        # D-Pad left/right
-                        logging.debug(f"DPAD X event value: {evt_value}")
+                        if evt_value == -1:  # D-pad left
+                            gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
+                        elif evt_value == 1:  # D-pad right
+                            gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
+                        else:  # Neutral horizontal
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
 
-                        if evt_value == -1:
-                            j.set_button(11, 1)  # D-pad left
-                            j.set_button(12, 0)  # Ensure right is not pressed
-                        elif evt_value == 1:
-                            j.set_button(12, 1)  # D-pad right
-                            j.set_button(11, 0)  # Ensure left is not pressed
-                        else:
-                            j.set_button(11, 0)  # Release left
-                            j.set_button(12, 0)  # Release right
                     elif evt_code == ABS_HAT0Y:
-                        # D-Pad up/down
-                        logging.debug(f"DPAD Y event value: {evt_value}")
+                        if evt_value == -1:  # D-pad up
+                            gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+                        elif evt_value == 1:  # D-pad down
+                            gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP)
+                        else:  # Neutral vertical
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP)
+                            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+                # Always send the updated state to the system
+                gamepad.update()
 
-                        if evt_value == -1:
-                            j.set_button(13, 1)  # D-pad up
-                            j.set_button(14, 0)  # Ensure down is not pressed
-                        elif evt_value == 1:
-                            j.set_button(14, 1)  # D-pad down
-                            j.set_button(13, 0)  # Ensure up is not pressed
-                        else:
-                            j.set_button(13, 0)  # Release up
-                            j.set_button(14, 0)  # Release down
         except Exception as e:
             logging.error(f"Error receiving or processing data: {str(e)}")
         finally:
