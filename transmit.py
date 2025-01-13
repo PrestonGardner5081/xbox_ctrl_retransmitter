@@ -1,10 +1,14 @@
 import inputs
+import socket
+import json
 
-def print_inputs():
-    while True:
-        events = inputs.get_gamepad()
-        for event in events:
-            print(f"Event Type: {event.ev_type}, Code: {event.code}, State: {event.state}")
+def send_inputs(host, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        while True:
+            events = inputs.get_gamepad()
+            for event in events:
+                data = json.dumps({'type': event.ev_type, 'code': event.code, 'state': event.state})
+                sock.sendto(data.encode('utf-8'), (host, port))
 
 if __name__ == "__main__":
-    print_inputs()
+    send_inputs('DEVICE2', 62311)
