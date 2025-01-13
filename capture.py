@@ -62,9 +62,9 @@ def normalize_trigger(value):
 
 def normalize_axis(value):
     """Normalize a signed 16-bit value (-32768..32767) to -1.0..1.0."""
-    # return max(-1.0, min(1.0, value / 32767.0))
-    print(value)
-    return value
+    return max(-1.0, min(1.0, value / 32767.0))
+    # print(value)
+    # return value
 
 def update_left_joystick(gamepad, x_value=None, y_value=None):
     """Update the left joystick while preserving its state."""
@@ -112,17 +112,17 @@ def receive_inputs(port):
                             gamepad.release_button(button)
 
                 elif evt_type == EV_ABS:
-                    if evt_code in [ABS_X, ABS_Y, ABS_RX, ABS_RY]:
+                    if evt_code in [ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ]:
                         # Normalize joystick values
-                        value_float = evt_value / 32767.0
+                        # value_float = evt_value / 32767.0
                         if evt_code == 0:  # ABS_X
-                            update_left_joystick(gamepad, x_value=value_float)
+                            update_left_joystick(gamepad, x_value=evt_value)
                         elif evt_code == 1:  # ABS_Y
-                            update_left_joystick(gamepad, y_value=-value_float)
+                            update_left_joystick(gamepad, y_value=-evt_value)
                         elif evt_code == 3:  # ABS_RX
-                            update_right_joystick(gamepad, x_value=value_float)
+                            update_right_joystick(gamepad, x_value=evt_value)
                         elif evt_code == 4:  # ABS_RY
-                            update_right_joystick(gamepad, y_value=-value_float)
+                            update_right_joystick(gamepad, y_value=-evt_value)
                         elif evt_code == 2:  # Left Trigger
                             gamepad.left_trigger(normalize_trigger(evt_value))
                         elif evt_code == 5:  # Right Trigger
