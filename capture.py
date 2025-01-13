@@ -13,4 +13,4 @@ def receive_inputs(port):
                 j.set_axis(pyvjoy.HID_USAGE_X, event['state'])  # Map events to vJoy axes/buttons
 
 if __name__ == "__main__":
-    receive_inputs(12345)  # Use the same port as in the sender script
+    receive_inputs(62311)  # Use the same port as in the sender script
