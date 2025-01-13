@@ -7,6 +7,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <netdb.h> 
+#include <iomanip>
 
 int main() {
     int fd = open("/dev/input/event5", O_RDONLY); // Replace X with the correct number
@@ -45,13 +46,33 @@ int main() {
 
     std::cout << "Socket setup complete for " << receiver_ip << ":" << port << ". You can now use this socket to send data." << std::endl;
     
+    struct sockaddr_in* ipv4 = (struct sockaddr_in *)res->ai_addr;
+
+    // Buffer to store the converted IP address
+    char ipstr[INET_ADDRSTRLEN];
+
+    // Convert the binary IP address to a string
+    inet_ntop(AF_INET, &(ipv4->sin_addr), ipstr, sizeof(ipstr));
+
+    std::cout << "Attempting to send data to IP: " << ipstr << " on port " << ntohs(servaddr->sin_port) << std::endl;
+
     struct input_event ev;
     while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev) == 0) {
         if (ev.type == EV_KEY || ev.type == EV_ABS) {
-            std::cout << "Event: " << ev.type << ", Code: " << ev.code << ", Value: " << ev.value << std::endl;
-
-
-            sendto(sockfd, &ev, sizeof(ev), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+            std::ostringstream ss;
+            ss << "{\"type\": " << ev.type << ", \"code\": " << ev.code << ", \"value\": " << ev.value << "}";
+            std::string json_str = ss.str();
+            std::cout << ss.str() << std::endl;
+            ssize_t sent = sendto(sockfd,
+                      json_str.c_str(),
+                      json_str.size(),
+                      0,
+                      reinterpret_cast<struct sockaddr*>(servaddr),
+                      sizeof(*servaddr));            if (sent == -1) {
+                std::cerr << "WARNING - failed to send message: " << strerror(errno) << std::endl;
+            } else {
+                std::cout << "Successfully sent " << sent << " bytes" << std::endl;
+            }
         }
     }
 
